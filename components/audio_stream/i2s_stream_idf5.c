@@ -107,9 +107,6 @@ static int i2s_driver_startup(audio_element_handle_t self, i2s_stream_cfg_t *i2s
     esp_err_t ret = ESP_OK;
     i2s_stream_t *i2s = (i2s_stream_t *)audio_element_getdata(self);
     i2s_comm_mode_t i2s_mode = i2s_cfg->transmit_mode;
-    int i2s_port = i2s_cfg->chan_cfg.id;
-    board_i2s_pin_t board_i2s_pin = { 0 };
-    get_i2s_pins(i2s_port, &board_i2s_pin);
 
     i2s_key_slot[i2s->port].chan_cfg.auto_clear = true;
     ret = i2s_new_channel(&i2s_key_slot[i2s->port].chan_cfg, i2s_key_slot[i2s->port].dir & I2S_DIR_TX ?  &i2s_key_slot[i2s->port].tx_handle : NULL,
@@ -117,11 +114,9 @@ static int i2s_driver_startup(audio_element_handle_t self, i2s_stream_cfg_t *i2s
     switch (i2s_mode) {
         case I2S_COMM_MODE_STD:
             if (i2s_key_slot[i2s->port].dir & I2S_DIR_TX) {
-                memcpy(&i2s_key_slot[i2s->port].tx_std_cfg.gpio_cfg, &board_i2s_pin, sizeof(board_i2s_pin_t));
                 ret |= i2s_channel_init_std_mode(i2s_key_slot[i2s->port].tx_handle, &i2s_key_slot[i2s->port].tx_std_cfg);
             }
             if (i2s_key_slot[i2s->port].dir & I2S_DIR_RX) {
-                memcpy(&i2s_key_slot[i2s->port].rx_std_cfg.gpio_cfg, &board_i2s_pin, sizeof(board_i2s_pin_t));
                 ret |= i2s_channel_init_std_mode(i2s_key_slot[i2s->port].rx_handle, &i2s_key_slot[i2s->port].rx_std_cfg);
             }
             break;
@@ -129,15 +124,11 @@ static int i2s_driver_startup(audio_element_handle_t self, i2s_stream_cfg_t *i2s
         case I2S_COMM_MODE_PDM:
 #if SOC_I2S_SUPPORTS_PDM_RX
             if (i2s_key_slot[i2s->port].dir & I2S_DIR_RX) {
-                i2s_key_slot[i2s->port].rx_pdm_cfg.gpio_cfg.clk = board_i2s_pin.bck_io_num;
-                i2s_key_slot[i2s->port].rx_pdm_cfg.gpio_cfg.din = board_i2s_pin.data_in_num;
                 ret |= i2s_channel_init_pdm_rx_mode(i2s_key_slot[i2s->port].rx_handle, &i2s_key_slot[i2s->port].rx_pdm_cfg);
             }
 #endif // SOC_I2S_SUPPORTS_PDM_RX
 #if SOC_I2S_SUPPORTS_PDM_TX
             if (i2s_key_slot[i2s->port].dir & I2S_DIR_TX) {
-                i2s_key_slot[i2s->port].tx_pdm_cfg.gpio_cfg.clk = board_i2s_pin.bck_io_num;
-                i2s_key_slot[i2s->port].tx_pdm_cfg.gpio_cfg.dout = board_i2s_pin.data_out_num;
                 ret |= i2s_channel_init_pdm_tx_mode(i2s_key_slot[i2s->port].tx_handle, &i2s_key_slot[i2s->port].tx_pdm_cfg);
             }
 #endif // SOC_I2S_SUPPORTS_PDM_TX
@@ -147,11 +138,9 @@ static int i2s_driver_startup(audio_element_handle_t self, i2s_stream_cfg_t *i2s
 #if SOC_I2S_SUPPORTS_TDM
         case I2S_COMM_MODE_TDM:
             if (i2s_key_slot[i2s->port].dir & I2S_DIR_TX) {
-                memcpy(&i2s_key_slot[i2s->port].tx_tdm_cfg.gpio_cfg, &board_i2s_pin, sizeof(board_i2s_pin_t));
                 ret |= i2s_channel_init_tdm_mode(i2s_key_slot[i2s->port].tx_handle, &i2s_key_slot[i2s->port].tx_tdm_cfg);
             }
             if (i2s_key_slot[i2s->port].dir & I2S_DIR_RX) {
-                memcpy(&i2s_key_slot[i2s->port].rx_tdm_cfg.gpio_cfg, &board_i2s_pin, sizeof(board_i2s_pin_t));
                 ret |= i2s_channel_init_tdm_mode(i2s_key_slot[i2s->port].rx_handle, &i2s_key_slot[i2s->port].rx_tdm_cfg);
             }
             break;
