@@ -81,6 +81,14 @@ esp_err_t hfp_service_init(void);
  * @return     The Audio Element handle
  */
 audio_element_handle_t hfp_stream_init(hfp_stream_config_t *config);
+
+/**
+ * @brief      HFP client callback function
+ *
+ * @param[in]  event  HFP client callback event
+ * @param[in]  param  HFP client callback parameter
+ */
+void bt_hf_client_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_t *param);
 #endif
 
 #ifdef __cplusplus

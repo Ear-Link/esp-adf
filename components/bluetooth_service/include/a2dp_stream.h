@@ -88,6 +88,25 @@ audio_element_handle_t a2dp_stream_init(a2dp_stream_config_t *config);
 esp_err_t a2dp_destroy();
 
 /**
+ * @brief      Get AVRCP volume.
+ *
+ * @return     AVRCP volume as percentage (0-100%)
+ */
+uint8_t bt_get_volume(void);
+
+/**
+ * @brief      Set AVRCP volume.
+ *
+ * @param[in]  volume  The volume as percentage (0-100%)
+ */
+void bt_set_volume(uint8_t volume);
+
+/**
+ * @brief      Check if volume notification registered
+ */
+bool bt_is_volume_notify(void);
+
+/**
  * @brief      Create Bluetooth peripheral.
  *             The returned bluetooth peripheral compatible with existing peripherals and can be used with the ESP Peripherals
  *
@@ -206,7 +225,32 @@ esp_err_t periph_bt_volume_up(esp_periph_handle_t periph);
  *     - ESP_FAIL
  */
 esp_err_t periph_bt_volume_down(esp_periph_handle_t periph);
+
+/**
+ * @brief      AVRCP target callback function
+ *
+ * @param[in]  event  AVRCP target callback event
+ * @param[in]  param  AVRCP target callback parameter
+ */
+void bt_avrc_tg_cb(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t *param);
+
 #endif
+
+/**
+ * @brief      AVRCP controller callback function
+ *
+ * @param[in]  event  AVRCP controller callback event
+ * @param[in]  param  AVRCP controller callback parameter
+ */
+void bt_avrc_ct_cb(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t *p_param);
+
+/**
+ * @brief      A2DP sink callback function
+ *
+ * @param[in]  event  A2DP callback event
+ * @param[in]  param  A2DP callback parameter
+ */
+void bt_a2d_sink_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param);
 
 esp_err_t periph_bt_get_connected_bd_addr(esp_periph_handle_t periph, uint8_t *dest);
 

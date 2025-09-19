@@ -40,6 +40,11 @@
 #if (defined CONFIG_CLASSIC_BT_ENABLED)
 static const char *TAG = "A2DP_STREAM";
 
+/* Application layer causes delay value */
+#define APP_DELAY_VALUE 50 // 5ms
+/* AVRCP used transaction labels */
+#define APP_RC_CT_TL_GET_CAPS (0)
+
 typedef struct {
     audio_element_handle_t      sink_stream;
     audio_element_handle_t      source_stream;
@@ -74,13 +79,31 @@ typedef struct {
 
 static aadp_info_t s_aadp_handler = { 0 };
 
-int16_t default_volume = 50;
-#if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0))
-static void bt_avrc_tg_cb(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t *param);
-#endif
-
 static const char *audio_state_str[] = { "Suspended", "Stopped", "Started" };
-static void bt_avrc_ct_cb(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t *param);
+
+static _lock_t current_volume_lock;
+// stored as percentage (0-100%)
+static uint8_t current_volume = 50;
+
+// returns volume as percentage (0-100%)
+uint8_t bt_get_volume(void) {
+    uint8_t volume;
+    _lock_acquire(&current_volume_lock);
+    volume = current_volume;
+    _lock_release(&current_volume_lock);
+    return volume;
+}
+
+// accepts volume as percentage (0-100%)
+void bt_set_volume(uint8_t volume) {
+    _lock_acquire(&current_volume_lock);
+    current_volume = volume;
+    _lock_release(&current_volume_lock);
+}
+
+bool bt_is_volume_notify(void) {
+    return s_aadp_handler.volume_notify;
+}
 
 static void audio_a2dp_stream_thread(void *pvParameters)
 {
@@ -110,7 +133,7 @@ static void audio_a2dp_stream_thread(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-static void bt_a2d_sink_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
+void bt_a2d_sink_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
 {
     if (s_aadp_handler.user_callback.user_a2d_cb) {
         s_aadp_handler.user_callback.user_a2d_cb(event, param);
@@ -178,6 +201,39 @@ static void bt_a2d_sink_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
                 audio_element_report_info(s_aadp_handler.sink_stream);
             }
             break;
+
+        case ESP_A2D_PROF_STATE_EVT:
+            a2d = (esp_a2d_cb_param_t*)(param);
+            if (ESP_A2D_INIT_SUCCESS == a2d->a2d_prof_stat.init_state) {
+                ESP_LOGI(TAG, "A2DP PROF STATE: Init Complete");
+            } else {
+                ESP_LOGI(TAG, "A2DP PROF STATE: Deinit Complete");
+            }
+            break;
+
+        case ESP_A2D_SNK_SET_DELAY_VALUE_EVT:
+            a2d = (esp_a2d_cb_param_t*)(param);
+            if (ESP_A2D_SET_INVALID_PARAMS ==
+                a2d->a2d_set_delay_value_stat.set_state) {
+                ESP_LOGI(TAG, "Set delay report value: fail");
+            } else {
+                ESP_LOGI(
+                    TAG,
+                    "Set delay report value: success, delay_value: %u * 1/10 ms",
+                    a2d->a2d_set_delay_value_stat.delay_value);
+            }
+            break;
+
+        case ESP_A2D_SNK_GET_DELAY_VALUE_EVT:
+            a2d = (esp_a2d_cb_param_t*)(param);
+            ESP_LOGI(TAG,
+                    "Get delay report value: delay_value: %u * 1/10 ms",
+                    a2d->a2d_get_delay_value_stat.delay_value);
+            /* Default delay value plus delay caused by application layer */
+            esp_a2d_sink_set_delay_value(a2d->a2d_get_delay_value_stat.delay_value +
+                                        APP_DELAY_VALUE);
+            break;
+
         default:
             ESP_LOGI(TAG, "Unhandled A2DP event: %d", event);
             break;
@@ -391,7 +447,7 @@ static void bt_avrc_volume_set_by_local(int16_t volume)
     _lock_release(&s_aadp_handler.volume_lock);
 
     esp_avrc_rn_param_t rn_param;
-    rn_param.volume = default_volume *127/100;;
+    rn_param.volume = bt_get_volume() *127/100;;
     esp_avrc_tg_send_rn_rsp(ESP_AVRC_RN_VOLUME_CHANGE, ESP_AVRC_RN_RSP_CHANGED, &rn_param);
     if (s_aadp_handler.audio_hal) {
         audio_hal_set_volume(s_aadp_handler.audio_hal, s_aadp_handler.volume);
@@ -401,7 +457,7 @@ static void bt_avrc_volume_set_by_local(int16_t volume)
 }
 #endif
 
-static void bt_avrc_ct_cb(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t *p_param)
+void bt_avrc_ct_cb(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t *p_param)
 {
     esp_avrc_ct_cb_param_t *rc = p_param;
     switch (event) {
@@ -411,6 +467,8 @@ static void bt_avrc_ct_cb(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t *
                 if (rc->conn_stat.connected) {
                     ESP_LOGD(TAG, "ESP_AVRC_CT_CONNECTION_STATE_EVT");
                     bt_key_act_sm_init();
+                    /* get remote supported event_ids of peer AVRCP Target */
+                    esp_avrc_ct_send_get_rn_capabilities_cmd(APP_RC_CT_TL_GET_CAPS);
                 } else if (0 == rc->conn_stat.connected) {
                     bt_key_act_sm_deinit();
                 }
@@ -434,11 +492,12 @@ static void bt_avrc_ct_cb(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t *
             }
         case ESP_AVRC_CT_METADATA_RSP_EVT: {
                 ESP_LOGD(TAG, "AVRC metadata rsp: attribute id 0x%x, %s", rc->meta_rsp.attr_id, rc->meta_rsp.attr_text);
-                // free(rc->meta_rsp.attr_text);
+                //! check this
+                free(rc->meta_rsp.attr_text);
                 break;
             }
         case ESP_AVRC_CT_CHANGE_NOTIFY_EVT: {
-                // ESP_LOGD(TAG, "AVRC event notification: %u, param: %u", rc->change_ntf.event_id, rc->change_ntf.event_parameter);
+                ESP_LOGD(TAG, "AVRC event notification: %u, param: %u", rc->change_ntf.event_id, rc->change_ntf.event_parameter);
                 break;
             }
         case ESP_AVRC_CT_REMOTE_FEATURES_EVT: {
@@ -452,7 +511,7 @@ static void bt_avrc_ct_cb(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t *
 }
 
 #if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0))
-static void bt_avrc_tg_cb(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t *param)
+void bt_avrc_tg_cb(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t *param)
 {
     ESP_LOGD(TAG, "%s evt %d", __func__, event);
     esp_avrc_tg_cb_param_t *rc = (esp_avrc_tg_cb_param_t *)(param);
@@ -469,10 +528,10 @@ static void bt_avrc_tg_cb(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t *
         break;
     }
     case ESP_AVRC_TG_SET_ABSOLUTE_VOLUME_CMD_EVT: {
-        default_volume = rc->set_abs_vol.volume * 100/127;
+        bt_set_volume(rc->set_abs_vol.volume * 100/127);
         ESP_LOGI(TAG, "AVRC set absolute volume: %d%%", (int)rc->set_abs_vol.volume * 100/ 0x7f);
         bt_avrc_volume_set_by_controller(rc->set_abs_vol.volume);
-        default_volume = rc->set_abs_vol.volume;
+        bt_set_volume(rc->set_abs_vol.volume);
         break;
     }
     case ESP_AVRC_TG_REGISTER_NOTIFICATION_EVT: {
@@ -480,7 +539,7 @@ static void bt_avrc_tg_cb(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t *
         if (rc->reg_ntf.event_id == ESP_AVRC_RN_VOLUME_CHANGE) {
             s_aadp_handler.volume_notify = true;
             esp_avrc_rn_param_t rn_param;
-            rn_param.volume = default_volume *127/100;
+            rn_param.volume = bt_get_volume() *127/100;
             ESP_LOGI(TAG, "rn_param.volume:%d", rn_param.volume);
             esp_avrc_tg_send_rn_rsp(ESP_AVRC_RN_VOLUME_CHANGE, ESP_AVRC_RN_RSP_INTERIM, &rn_param);
         }
@@ -532,14 +591,14 @@ static esp_err_t periph_bt_avrc_passthrough_cmd(esp_periph_handle_t periph, uint
 #if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0))
     if(s_aadp_handler.avrcp_conn_tg_state) {
         if (cmd == ESP_AVRC_PT_CMD_VOL_DOWN) {
-            int16_t volume = (default_volume - 5) < 0 ? 0 : (default_volume - 5);
+            int16_t volume = (bt_get_volume() - 5) < 0 ? 0 : (bt_get_volume() - 5);
             bt_avrc_volume_set_by_local(volume);
-            default_volume = volume;
+            bt_set_volume(volume);
             return err;
         } else if (cmd == ESP_AVRC_PT_CMD_VOL_UP) {
-            int16_t volume = (default_volume + 5) > 100 ? 100 : (default_volume + 5);
+            int16_t volume = (bt_get_volume() + 5) > 100 ? 100 : (bt_get_volume() + 5);
             bt_avrc_volume_set_by_local(volume);
-            default_volume = volume;
+            bt_set_volume(volume);
             return err;
         }
     }

@@ -65,6 +65,8 @@ const char *c_hf_evt_str[] = {
     "INBAND_RING_TONE_EVT",              /*!< in-band ring tone settings */
     "LAST_VOICE_TAG_NUMBER_EVT",         /*!< requested number from AG event */
     "RING_IND_EVT",                      /*!< ring indication event */
+    "PKT_STAT_NUMS_GET_EVT",             /*!< requested number of packet different status */
+    "PROF_STATE_EVT",                    /*!< Indicate HF CLIENT init or deinit complete */
 };
 
 // esp_hf_client_connection_state_t
@@ -222,7 +224,7 @@ static void bt_app_hf_client_incoming_cb(const uint8_t *buf, uint32_t sz)
 /* callback for HF_CLIENT */
 void bt_hf_client_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_t *param)
 {
-    if (event <= ESP_HF_CLIENT_RING_IND_EVT) {
+    if (event < ESP_HF_CLIENT_EVT_COUNT) {
         ESP_LOGI(TAG, "APP HFP event: %s", c_hf_evt_str[event]);
     } else {
         ESP_LOGE(TAG, "APP HFP invalid event %d", event);
