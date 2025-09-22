@@ -240,7 +240,7 @@ void bt_a2d_sink_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
     }
 }
 
-static void bt_a2d_sink_data_cb(const uint8_t *data, uint32_t len)
+void bt_a2d_sink_data_cb(const uint8_t *data, uint32_t len)
 {
     if (s_aadp_handler.user_callback.user_a2d_sink_data_cb) {
         s_aadp_handler.user_callback.user_a2d_sink_data_cb(data, len);
@@ -303,7 +303,7 @@ static void bt_a2d_source_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param
     }
 }
 
-static int32_t bt_a2d_source_data_cb(uint8_t *data, int32_t len)
+int32_t bt_a2d_source_data_cb(uint8_t *data, int32_t len)
 {
     if (s_aadp_handler.source_stream) {
         if (audio_element_get_state(s_aadp_handler.source_stream) == AEL_STATE_RUNNING) {

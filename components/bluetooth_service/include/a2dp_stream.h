@@ -254,6 +254,9 @@ void bt_a2d_sink_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param);
 
 esp_err_t periph_bt_get_connected_bd_addr(esp_periph_handle_t periph, uint8_t *dest);
 
+void bt_a2d_sink_data_cb(const uint8_t *data, uint32_t len);
+int32_t bt_a2d_source_data_cb(uint8_t *data, int32_t len);
+
 #endif  /* (defined CONFIG_CLASSIC_BT_ENABLED) */
 
 #ifdef __cplusplus
