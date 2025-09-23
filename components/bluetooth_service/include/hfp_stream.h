@@ -34,6 +34,7 @@ extern "C" {
 #if (defined CONFIG_CLASSIC_BT_ENABLED)
 #include "esp_bt.h"
 #include "esp_hf_client_api.h"
+#include "esp_hf_ag_api.h"
 
 typedef enum {
     HF_DATA_CVSD = 0,
@@ -89,6 +90,14 @@ audio_element_handle_t hfp_stream_init(hfp_stream_config_t *config);
  * @param[in]  param  HFP client callback parameter
  */
 void bt_hf_client_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_t *param);
+
+/**
+ * @brief      HFP AG callback function
+ *
+ * @param[in]  event  HFP AG callback event
+ * @param[in]  param  HFP AG callback parameter
+ */
+void bt_hf_ag_cb(esp_hf_cb_event_t event, esp_hf_cb_param_t *param);
 #endif
 
 #ifdef __cplusplus

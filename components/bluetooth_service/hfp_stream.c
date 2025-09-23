@@ -221,6 +221,7 @@ static void bt_app_hf_client_incoming_cb(const uint8_t *buf, uint32_t sz)
         }
     }
 }
+
 /* callback for HF_CLIENT */
 void bt_hf_client_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_t *param)
 {
@@ -337,6 +338,60 @@ void bt_hf_client_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_t *p
         break;
     default:
         ESP_LOGI(TAG, "HF_CLIENT EVT: %d", event);
+        break;
+    }
+}
+
+// gets const data from mic, sends to stream output rb
+static void bt_app_hf_ag_incoming_cb(const uint8_t* buf, uint32_t sz) {
+    if (hfp_incoming_stream) {
+        if (audio_element_get_state(hfp_incoming_stream) == AEL_STATE_RUNNING) {
+            audio_element_output(hfp_incoming_stream, (char*)buf, sz);
+        }
+    }
+}
+
+// gets data from stream input rb, sends to headphones through p_buf; needs
+// esp_hf_ag_outgoing_data_ready?
+static uint32_t bt_app_hf_ag_outgoing_cb(uint8_t* p_buf, uint32_t sz) {
+    int out_len_bytes = 0;
+    if (is_get_data) {
+        out_len_bytes =
+            audio_element_input(hfp_outgoing_stream, (char*)p_buf, sz);
+    }
+
+    if (out_len_bytes == sz) {
+        is_get_data = false;
+        return sz;
+    } else {
+        is_get_data = true;
+        return 0;
+    }
+}
+
+void bt_hf_ag_cb(esp_hf_cb_event_t event, esp_hf_cb_param_t* param) {
+    switch (event) {
+    case ESP_HF_AUDIO_STATE_EVT:
+        ESP_LOGI(TAG, "Audio state: %d (%s)", param->audio_stat.state,
+                 (param->audio_stat.state == ESP_HF_AUDIO_STATE_CONNECTED ||
+                  param->audio_stat.state == ESP_HF_AUDIO_STATE_CONNECTED_MSBC)
+                     ? "CONNECTED"
+                     : "DISCONNECTED");
+
+        if (param->audio_stat.state == ESP_HF_AUDIO_STATE_CONNECTED ||
+            param->audio_stat.state == ESP_HF_AUDIO_STATE_CONNECTED_MSBC) {
+            ESP_LOGI(TAG, "HFP audio ready - codec: %s",
+                     param->audio_stat.state ==
+                             ESP_HF_AUDIO_STATE_CONNECTED_MSBC
+                         ? "mSBC"
+                         : "CVSD");
+            esp_hf_ag_register_data_callback(bt_app_hf_ag_incoming_cb,
+                                             bt_app_hf_ag_outgoing_cb);
+        }
+        break;
+
+    default:
+        ESP_LOGI(TAG, "HFP AG unhandled event: %d", event);
         break;
     }
 }
