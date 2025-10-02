@@ -32,6 +32,11 @@
 #include "sdkconfig.h"
 #include "hfp_stream.h"
 
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+
 #if (defined CONFIG_CLASSIC_BT_ENABLED)
 static const char *TAG = "HFP_STREAM";
 
@@ -223,8 +228,11 @@ static void bt_app_hf_client_incoming_cb(const uint8_t *buf, uint32_t sz)
 }
 
 /* callback for HF_CLIENT */
-void bt_hf_client_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_t *param)
+void bt_hf_client_cb(uint16_t _event, void* _param)
 {
+    esp_hf_client_cb_event_t event = (esp_hf_client_cb_event_t) _event;
+    esp_hf_client_cb_param_t *param = (esp_hf_client_cb_param_t *)(_param);
+
     if (event < ESP_HF_CLIENT_EVT_COUNT) {
         ESP_LOGI(TAG, "APP HFP event: %s", c_hf_evt_str[event]);
     } else {
@@ -342,6 +350,102 @@ void bt_hf_client_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_t *p
     }
 }
 
+// 7500 microseconds(=12 slots) is aligned to 1 msbc frame duration, and is
+// multiple of common Tesco for eSCO link with EV3 or 2-EV3 packet type
+#define BLOCK_DURATION_US (7500)
+
+#define WBS_SAMPLING_RATE_KHZ (16)
+#define SAMPLING_RATE_KHZ (8)
+
+#define BYTES_PER_SAMPLE (2)
+
+// input can refer to Enhanced Setup Synchronous Connection Command in core
+// spec4.2 Vol2, Part E
+#define WBS_INPUT_DATA_SIZE                                                    \
+    (WBS_SAMPLING_RATE_KHZ * BLOCK_DURATION_US / 1000 * BYTES_PER_SAMPLE) // 240
+#define INPUT_DATA_SIZE                                                        \
+    (SAMPLING_RATE_KHZ * BLOCK_DURATION_US / 1000 * BYTES_PER_SAMPLE) // 120
+
+#define GENERATOR_TICK_US (4000)
+
+static esp_timer_handle_t s_periodic_timer;
+static uint64_t s_last_enter_time, s_now_enter_time;
+static uint64_t s_us_duration;
+static SemaphoreHandle_t s_send_data_Semaphore = NULL;
+static TaskHandle_t s_bt_hf_ag_start_audio_task_handler = NULL;
+static esp_hf_audio_state_t s_audio_code;
+
+static void bt_hf_ag_start_audio_timer_cb(void* arg) {
+    if (!xSemaphoreGive(s_send_data_Semaphore)) {
+        ESP_LOGE(TAG, "%s xSemaphoreGive failed", __func__);
+        return;
+    }
+    return;
+}
+
+static void bt_hf_ag_start_audio_task(void* arg) {
+    uint64_t frame_data_num;
+    size_t item_size = 0;
+    ESP_LOGI(TAG, "Entered HFP AG audio task");
+    for (;;) {
+        if (xSemaphoreTake(s_send_data_Semaphore, (TickType_t)portMAX_DELAY)) {
+            s_now_enter_time = esp_timer_get_time();
+            s_us_duration = s_now_enter_time - s_last_enter_time;
+            if (s_audio_code == ESP_HF_AUDIO_STATE_CONNECTED_MSBC) {
+                // time of a frame is 7.5ms, sample is 120, data is 2
+                // (byte/sample), so a frame is 240 byte
+                // (HF_SBC_ENC_RAW_DATA_SIZE)
+                frame_data_num =
+                    s_us_duration / BLOCK_DURATION_US * WBS_INPUT_DATA_SIZE;
+                s_last_enter_time +=
+                    frame_data_num / WBS_INPUT_DATA_SIZE * BLOCK_DURATION_US;
+            } else {
+                frame_data_num =
+                    s_us_duration / BLOCK_DURATION_US * INPUT_DATA_SIZE;
+                s_last_enter_time +=
+                    frame_data_num / INPUT_DATA_SIZE * BLOCK_DURATION_US;
+            }
+            if (frame_data_num == 0) {
+                continue;
+            }
+            esp_hf_ag_outgoing_data_ready();
+        }
+    }
+}
+
+static void bt_hf_ag_start_audio(void) {
+    s_send_data_Semaphore = xSemaphoreCreateBinary();
+    xTaskCreate(bt_hf_ag_start_audio_task, "HFP_AG_audio_task", 2048, NULL,
+                configMAX_PRIORITIES - 3, &s_bt_hf_ag_start_audio_task_handler);
+    const esp_timer_create_args_t c_periodic_timer_args = {
+        .callback = &bt_hf_ag_start_audio_timer_cb, .name = "periodic"};
+    ESP_ERROR_CHECK(
+        esp_timer_create(&c_periodic_timer_args, &s_periodic_timer));
+    ESP_ERROR_CHECK(
+        esp_timer_start_periodic(s_periodic_timer, GENERATOR_TICK_US));
+    ESP_LOGI(TAG, "Started HFP AG audio task");
+    s_last_enter_time = esp_timer_get_time();
+    return;
+}
+
+static void bt_hf_ag_stop_audio(void) {
+    if (s_bt_hf_ag_start_audio_task_handler) {
+        vTaskDelete(s_bt_hf_ag_start_audio_task_handler);
+        s_bt_hf_ag_start_audio_task_handler = NULL;
+    }
+    if (s_periodic_timer) {
+        ESP_ERROR_CHECK(esp_timer_stop(s_periodic_timer));
+        ESP_ERROR_CHECK(esp_timer_delete(s_periodic_timer));
+    }
+    if (s_send_data_Semaphore) {
+        vSemaphoreDelete(s_send_data_Semaphore);
+        s_send_data_Semaphore = NULL;
+    }
+    ESP_LOGI(TAG, "Stoped HFP AG audio task");
+    return;
+}
+
+// called by hfp ag
 // gets const data from mic, sends to stream output rb
 static void bt_app_hf_ag_incoming_cb(const uint8_t* buf, uint32_t sz) {
     if (hfp_incoming_stream) {
@@ -351,22 +455,12 @@ static void bt_app_hf_ag_incoming_cb(const uint8_t* buf, uint32_t sz) {
     }
 }
 
-// gets data from stream input rb, sends to headphones through p_buf; needs
-// esp_hf_ag_outgoing_data_ready?
+// called by hfp ag
+// gets data from stream input rb, sends to headphones through p_buf;
+// needs esp_hf_ag_outgoing_data_ready
 static uint32_t bt_app_hf_ag_outgoing_cb(uint8_t* p_buf, uint32_t sz) {
-    int out_len_bytes = 0;
-    if (is_get_data) {
-        out_len_bytes =
-            audio_element_input(hfp_outgoing_stream, (char*)p_buf, sz);
-    }
-
-    if (out_len_bytes == sz) {
-        is_get_data = false;
-        return sz;
-    } else {
-        is_get_data = true;
-        return 0;
-    }
+    int out_len_bytes = audio_element_input(hfp_outgoing_stream, (char*)p_buf, sz);
+    return out_len_bytes;
 }
 
 void bt_hf_ag_cb(esp_hf_cb_event_t event, esp_hf_cb_param_t* param) {
@@ -380,6 +474,7 @@ void bt_hf_ag_cb(esp_hf_cb_event_t event, esp_hf_cb_param_t* param) {
 
         if (param->audio_stat.state == ESP_HF_AUDIO_STATE_CONNECTED ||
             param->audio_stat.state == ESP_HF_AUDIO_STATE_CONNECTED_MSBC) {
+            s_audio_code = param->audio_stat.state;
             ESP_LOGI(TAG, "HFP audio ready - codec: %s",
                      param->audio_stat.state ==
                              ESP_HF_AUDIO_STATE_CONNECTED_MSBC
@@ -387,21 +482,18 @@ void bt_hf_ag_cb(esp_hf_cb_event_t event, esp_hf_cb_param_t* param) {
                          : "CVSD");
             esp_hf_ag_register_data_callback(bt_app_hf_ag_incoming_cb,
                                              bt_app_hf_ag_outgoing_cb);
+            bt_hf_ag_start_audio();
+            ESP_LOGI(TAG, "Started HFP Audio");
+        } else if (param->audio_stat.state == ESP_HF_AUDIO_STATE_DISCONNECTED) {
+            bt_hf_ag_stop_audio();
+            ESP_LOGI(TAG, "Stopped HFP Audio");
         }
         break;
 
     default:
-        ESP_LOGI(TAG, "HFP AG unhandled event: %d", event);
+        ESP_LOGW(TAG, "HFP AG unhandled event: %d", event);
         break;
     }
-}
-
-esp_err_t hfp_service_init()
-{
-    esp_hf_client_register_callback(bt_hf_client_cb);
-    esp_hf_client_init();
-
-    return ESP_OK;
 }
 
 static esp_err_t _hfp_stream_destroy(audio_element_handle_t self)
