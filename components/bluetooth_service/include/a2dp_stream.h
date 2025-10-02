@@ -229,28 +229,28 @@ esp_err_t periph_bt_volume_down(esp_periph_handle_t periph);
 /**
  * @brief      AVRCP target callback function
  *
- * @param[in]  event  AVRCP target callback event
- * @param[in]  param  AVRCP target callback parameter
+ * @param[in]  _event  AVRCP target callback event
+ * @param[in]  _param  AVRCP target callback parameter
  */
-void bt_avrc_tg_cb(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t *param);
+void bt_avrc_tg_cb(uint16_t _event, void* _param);
 
 #endif
 
 /**
  * @brief      AVRCP controller callback function
  *
- * @param[in]  event  AVRCP controller callback event
- * @param[in]  param  AVRCP controller callback parameter
+ * @param[in]  _event  AVRCP controller callback event
+ * @param[in]  _param  AVRCP controller callback parameter
  */
-void bt_avrc_ct_cb(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t *p_param);
+void bt_avrc_ct_cb(uint16_t _event, void* _param);
 
 /**
  * @brief      A2DP sink callback function
  *
- * @param[in]  event  A2DP callback event
- * @param[in]  param  A2DP callback parameter
+ * @param[in]  _event  A2DP callback event
+ * @param[in]  _param  A2DP callback parameter
  */
-void bt_a2d_sink_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param);
+void bt_a2d_sink_cb(uint16_t _event, void* _param);
 
 esp_err_t periph_bt_get_connected_bd_addr(esp_periph_handle_t periph, uint8_t *dest);
 

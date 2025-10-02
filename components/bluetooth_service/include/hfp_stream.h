@@ -86,10 +86,10 @@ audio_element_handle_t hfp_stream_init(hfp_stream_config_t *config);
 /**
  * @brief      HFP client callback function
  *
- * @param[in]  event  HFP client callback event
- * @param[in]  param  HFP client callback parameter
+ * @param[in]  _event  HFP client callback event
+ * @param[in]  _param  HFP client callback parameter
  */
-void bt_hf_client_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_t *param);
+void bt_hf_client_cb(uint16_t _event, void* _param);
 
 /**
  * @brief      HFP AG callback function

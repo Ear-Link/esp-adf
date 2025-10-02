@@ -133,19 +133,20 @@ static void audio_a2dp_stream_thread(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-void bt_a2d_sink_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
+void bt_a2d_sink_cb(uint16_t _event, void* _param)
 {
+    esp_a2d_cb_event_t event = (esp_a2d_cb_event_t) _event;
+    esp_a2d_cb_param_t *param = (esp_a2d_cb_param_t *)(_param);
     if (s_aadp_handler.user_callback.user_a2d_cb) {
         s_aadp_handler.user_callback.user_a2d_cb(event, param);
     }
-    esp_a2d_cb_param_t *a2d = NULL;
+    esp_a2d_cb_param_t *a2d = (esp_a2d_cb_param_t *)(param);
     switch (event) {
         case ESP_A2D_CONNECTION_STATE_EVT:
-            a2d = (esp_a2d_cb_param_t *)(param);
             uint8_t *bda = a2d->conn_stat.remote_bda;
             ESP_LOGI(TAG, "A2DP bd address:, [%02x:%02x:%02x:%02x:%02x:%02x]",
                      bda[0], bda[1], bda[2], bda[3], bda[4], bda[5]);
-            if (param->conn_stat.state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
+            if (a2d->conn_stat.state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
                 ESP_LOGI(TAG, "A2DP connection state =  DISCONNECTED");
                 s_aadp_handler.connected_flag = 0;
                 memset(s_aadp_handler.connected_bd_addr, 0x00, ESP_BD_ADDR_LEN);
@@ -155,7 +156,7 @@ void bt_a2d_sink_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
                 if (s_aadp_handler.bt_avrc_periph) {
                     esp_periph_send_event(s_aadp_handler.bt_avrc_periph, PERIPH_BLUETOOTH_DISCONNECTED, NULL, 0);
                 }
-            } else if (param->conn_stat.state == ESP_A2D_CONNECTION_STATE_CONNECTED) {
+            } else if (a2d->conn_stat.state == ESP_A2D_CONNECTION_STATE_CONNECTED) {
                 ESP_LOGI(TAG, "A2DP connection state =  CONNECTED");
                 memcpy(s_aadp_handler.connected_bd_addr, bda, ESP_BD_ADDR_LEN);
                 s_aadp_handler.connected_flag = 1;
@@ -166,7 +167,6 @@ void bt_a2d_sink_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
             break;
 
         case ESP_A2D_AUDIO_STATE_EVT:
-            a2d = (esp_a2d_cb_param_t *)(param);
             ESP_LOGD(TAG, "A2DP audio state: %s", audio_state_str[a2d->audio_stat.state]);
             if (s_aadp_handler.bt_avrc_periph == NULL) {
                 break;
@@ -183,9 +183,9 @@ void bt_a2d_sink_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
 
         case ESP_A2D_AUDIO_CFG_EVT:
             ESP_LOGI(TAG, "A2DP audio stream configuration, codec type %d", param->audio_cfg.mcc.type);
-            if (param->audio_cfg.mcc.type == ESP_A2D_MCT_SBC) {
+            if (a2d->audio_cfg.mcc.type == ESP_A2D_MCT_SBC) {
                 int sample_rate = 16000;
-                char oct0 = param->audio_cfg.mcc.cie.sbc[0];
+                char oct0 = a2d->audio_cfg.mcc.cie.sbc[0];
                 if (oct0 & (0x01 << 6)) {
                     sample_rate = 32000;
                 } else if (oct0 & (0x01 << 5)) {
@@ -203,7 +203,6 @@ void bt_a2d_sink_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
             break;
 
         case ESP_A2D_PROF_STATE_EVT:
-            a2d = (esp_a2d_cb_param_t*)(param);
             if (ESP_A2D_INIT_SUCCESS == a2d->a2d_prof_stat.init_state) {
                 ESP_LOGI(TAG, "A2DP PROF STATE: Init Complete");
             } else {
@@ -212,7 +211,6 @@ void bt_a2d_sink_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
             break;
 
         case ESP_A2D_SNK_SET_DELAY_VALUE_EVT:
-            a2d = (esp_a2d_cb_param_t*)(param);
             if (ESP_A2D_SET_INVALID_PARAMS ==
                 a2d->a2d_set_delay_value_stat.set_state) {
                 ESP_LOGI(TAG, "Set delay report value: fail");
@@ -225,7 +223,6 @@ void bt_a2d_sink_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
             break;
 
         case ESP_A2D_SNK_GET_DELAY_VALUE_EVT:
-            a2d = (esp_a2d_cb_param_t*)(param);
             ESP_LOGI(TAG,
                     "Get delay report value: delay_value: %u * 1/10 ms",
                     a2d->a2d_get_delay_value_stat.delay_value);
@@ -457,9 +454,10 @@ static void bt_avrc_volume_set_by_local(int16_t volume)
 }
 #endif
 
-void bt_avrc_ct_cb(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t *p_param)
+void bt_avrc_ct_cb(uint16_t _event, void* _param)
 {
-    esp_avrc_ct_cb_param_t *rc = p_param;
+    esp_avrc_ct_cb_event_t event = (esp_avrc_ct_cb_event_t) _event;
+    esp_avrc_ct_cb_param_t *rc = (esp_avrc_ct_cb_param_t *) _param;
     switch (event) {
         case ESP_AVRC_CT_CONNECTION_STATE_EVT: {
                 uint8_t *bda = rc->conn_stat.remote_bda;
@@ -511,10 +509,11 @@ void bt_avrc_ct_cb(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t *p_param
 }
 
 #if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0))
-void bt_avrc_tg_cb(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t *param)
+void bt_avrc_tg_cb(uint16_t _event, void* _param)
 {
-    ESP_LOGD(TAG, "%s evt %d", __func__, event);
-    esp_avrc_tg_cb_param_t *rc = (esp_avrc_tg_cb_param_t *)(param);
+    ESP_LOGD(TAG, "%s evt %d", __func__, _event);
+    esp_avrc_tg_cb_event_t event = (esp_avrc_tg_cb_event_t) _event;
+    esp_avrc_tg_cb_param_t *rc = (esp_avrc_tg_cb_param_t *)(_param);
     switch (event) {
     case ESP_AVRC_TG_CONNECTION_STATE_EVT: {
         uint8_t *bda = rc->conn_stat.remote_bda;
