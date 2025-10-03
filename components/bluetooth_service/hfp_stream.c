@@ -366,7 +366,8 @@ void bt_hf_client_cb(uint16_t _event, void* _param)
 #define INPUT_DATA_SIZE                                                        \
     (SAMPLING_RATE_KHZ * BLOCK_DURATION_US / 1000 * BYTES_PER_SAMPLE) // 120
 
-#define GENERATOR_TICK_US (4000)
+// increased to get rid of "BT_BTM: SCO xmit Q overflow, pkt dropped"
+#define GENERATOR_TICK_US (4000 * 2)
 
 static esp_timer_handle_t s_periodic_timer;
 static uint64_t s_last_enter_time, s_now_enter_time;

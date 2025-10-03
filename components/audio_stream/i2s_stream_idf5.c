@@ -305,6 +305,13 @@ static esp_err_t _i2s_set_clk(i2s_stream_t *i2s, int rate, int bits, int ch)
     }
     if (i2s->config.transmit_mode == I2S_COMM_MODE_STD) {
         if (i2s_key_slot[port].tx_handle != NULL && i2s->type == AUDIO_STREAM_WRITER) {
+            // todo test
+            // if (i2s_key_slot[port].tx_std_cfg.slot_cfg.data_bit_width == bits &&
+            //     i2s_key_slot[port].tx_std_cfg.slot_cfg.ws_width == bits &&
+            //     i2s_key_slot[port].tx_std_cfg.slot_cfg.slot_mode == slot_mode &&
+            //     i2s_key_slot[port].tx_std_cfg.clk_cfg.sample_rate_hz == rate) {
+            //     return ESP_OK;
+            // }
             i2s_key_slot[port].tx_std_cfg.slot_cfg.data_bit_width = bits;
             i2s_key_slot[port].tx_std_cfg.slot_cfg.ws_width = bits;
             i2s_key_slot[port].tx_std_cfg.slot_cfg.slot_mode = slot_mode;
@@ -315,6 +322,13 @@ static esp_err_t _i2s_set_clk(i2s_stream_t *i2s, int rate, int bits, int ch)
             err |= i2s_channel_enable(i2s_key_slot[port].tx_handle);
         }
         if (i2s_key_slot[port].rx_handle != NULL && i2s->type == AUDIO_STREAM_READER) {
+            // todo test
+            // if (i2s_key_slot[port].rx_std_cfg.slot_cfg.data_bit_width == bits &&
+            //     i2s_key_slot[port].rx_std_cfg.slot_cfg.ws_width == bits &&
+            //     i2s_key_slot[port].rx_std_cfg.slot_cfg.slot_mode == slot_mode &&
+            //     i2s_key_slot[port].rx_std_cfg.clk_cfg.sample_rate_hz == rate) {
+            //     return ESP_OK;
+            // }
             i2s_key_slot[i2s->port].rx_std_cfg.slot_cfg.data_bit_width = bits;
             i2s_key_slot[i2s->port].rx_std_cfg.slot_cfg.ws_width = bits;
             i2s_key_slot[i2s->port].rx_std_cfg.slot_cfg.slot_mode = slot_mode;
