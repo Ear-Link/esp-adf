@@ -123,6 +123,10 @@ struct audio_element {
     volatile bool               is_running;
     volatile bool               task_run;
     volatile bool               stopping;
+#ifdef AUDIO_DEBUG
+    uint32_t count_in;
+    uint32_t count_out;
+#endif
 };
 
 const static int STOPPED_BIT = BIT0;
@@ -384,12 +388,20 @@ audio_element_err_t audio_element_input(audio_element_handle_t el, char *buffer,
         }
         in_len = el->in.read_cb.cb(el, buffer, wanted_size, el->input_wait_time,
                                    el->in.read_cb.ctx);
+#ifdef AUDIO_DEBUG
+        if (el->count_in++ % 100 == 0)
+            ESP_LOGI(TAG, "! %s: audio_element_input IO_TYPE_CB, in_len: %d", el->tag, in_len);
+#endif
     } else if (el->read_type == IO_TYPE_RB) {
         if (el->in.input_rb == NULL) {
             ESP_LOGE(TAG, "[%s] Read IO type ringbuf but ringbuf not set", el->tag);
             return ESP_FAIL;
         }
         in_len = rb_read(el->in.input_rb, buffer, wanted_size, el->input_wait_time);
+#ifdef AUDIO_DEBUG
+        if (el->count_in++ % 100 == 0)
+            ESP_LOGI(TAG, "! %s: audio_element_input IO_TYPE_RB, in_len: %d", el->tag, in_len);
+#endif
     } else {
         ESP_LOGE(TAG, "[%s] Invalid read IO type", el->tag);
         return ESP_FAIL;
@@ -425,10 +437,18 @@ audio_element_err_t audio_element_output(audio_element_handle_t el, char *buffer
         if (el->out.write_cb.cb && write_size) {
             output_len = el->out.write_cb.cb(el, buffer, write_size, el->output_wait_time,
                                              el->out.write_cb.ctx);
+#ifdef AUDIO_DEBUG
+            if (el->count_in++ % 100 == 0)
+                ESP_LOGI(TAG, "! %s: audio_element_output IO_TYPE_CB, output_len: %d", el->tag, output_len);
+#endif
         }
     } else if (el->write_type == IO_TYPE_RB) {
         if (el->out.output_rb && write_size) {
             output_len = rb_write(el->out.output_rb, buffer, write_size, el->output_wait_time);
+#ifdef AUDIO_DEBUG
+            if (el->count_in++ % 100 == 0)
+                ESP_LOGI(TAG, "! %s: audio_element_output IO_TYPE_RB, output_len: %d", el->tag, output_len);
+#endif
             if ((rb_bytes_filled(el->out.output_rb) > el->out_buf_size_expect) || (output_len < 0)) {
                 xEventGroupSetBits(el->state_event, BUFFER_REACH_LEVEL_BIT);
             }

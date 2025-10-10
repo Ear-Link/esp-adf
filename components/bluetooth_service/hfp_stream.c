@@ -48,6 +48,13 @@ static hfp_stream_user_callback_t  hfp_stream_user_callback;
 static audio_element_handle_t hfp_incoming_stream = NULL;
 static audio_element_handle_t hfp_outgoing_stream = NULL;
 
+#ifdef DEBUG_AUDIO
+static uint32_t hfp_client_audio_packet_count_outgoing = 0;
+static uint32_t hfp_client_audio_packet_count_incoming = 0;
+static uint32_t hfp_ag_audio_packet_count_incoming = 0;
+static uint32_t hfp_ag_audio_packet_count_outgoing = 0;
+#endif
+
 const char *c_hf_evt_str[] = {
     "CONNECTION_STATE_EVT",              /*!< connection state changed event */
     "AUDIO_STATE_EVT",                   /*!< audio connection state change event */
@@ -207,7 +214,11 @@ static uint32_t bt_app_hf_client_outgoing_cb(uint8_t *p_buf, uint32_t sz)
     if (is_get_data) {
         out_len_bytes = audio_element_input(hfp_outgoing_stream, (char *)p_buf, sz);
     }
-
+#ifdef DEBUG_AUDIO
+    if (hfp_client_audio_packet_count_outgoing++ % 100 == 0) {
+        ESP_LOGI(TAG, "bt_app_hf_client_outgoing_cb: %lu, sz: %lu", hfp_client_audio_packet_count_outgoing, sz);
+    }
+#endif
     if (out_len_bytes == sz) {
         is_get_data = false;
         return sz;
@@ -224,6 +235,11 @@ static void bt_app_hf_client_incoming_cb(const uint8_t *buf, uint32_t sz)
             audio_element_output(hfp_incoming_stream, (char *)buf, sz);
             esp_hf_client_outgoing_data_ready();
         }
+#ifdef DEBUG_AUDIO
+        if (hfp_client_audio_packet_count_incoming++ % 100 == 0) {
+            ESP_LOGI(TAG, "bt_app_hf_client_incoming_cb: %lu, sz: %lu", hfp_client_audio_packet_count_incoming, sz);
+        }
+#endif
     }
 }
 
@@ -424,7 +440,7 @@ static void bt_hf_ag_start_audio(void) {
         esp_timer_create(&c_periodic_timer_args, &s_periodic_timer));
     ESP_ERROR_CHECK(
         esp_timer_start_periodic(s_periodic_timer, GENERATOR_TICK_US));
-    ESP_LOGI(TAG, "Started HFP AG audio task");
+    ESP_LOGI(TAG, "Started HFP AG audio");
     s_last_enter_time = esp_timer_get_time();
     return;
 }
@@ -453,6 +469,11 @@ static void bt_app_hf_ag_incoming_cb(const uint8_t* buf, uint32_t sz) {
         if (audio_element_get_state(hfp_incoming_stream) == AEL_STATE_RUNNING) {
             audio_element_output(hfp_incoming_stream, (char*)buf, sz);
         }
+#ifdef DEBUG_AUDIO
+        if (hfp_ag_audio_packet_count_incoming++ % 100 == 0) {
+            ESP_LOGI(TAG, "bt_app_hf_ag_incoming_cb: %lu, sz: %lu", hfp_ag_audio_packet_count_incoming, sz);
+        }
+#endif
     }
 }
 
@@ -461,6 +482,11 @@ static void bt_app_hf_ag_incoming_cb(const uint8_t* buf, uint32_t sz) {
 // needs esp_hf_ag_outgoing_data_ready
 static uint32_t bt_app_hf_ag_outgoing_cb(uint8_t* p_buf, uint32_t sz) {
     int out_len_bytes = audio_element_input(hfp_outgoing_stream, (char*)p_buf, sz);
+#ifdef DEBUG_AUDIO
+    if (hfp_ag_audio_packet_count_outgoing++ % 100 == 0) {
+        ESP_LOGI(TAG, "bt_app_hf_ag_outgoing_cb: %lu, sz: %lu, out_len_bytes: %d", hfp_ag_audio_packet_count_outgoing, sz, out_len_bytes);
+    }
+#endif
     return out_len_bytes;
 }
 
