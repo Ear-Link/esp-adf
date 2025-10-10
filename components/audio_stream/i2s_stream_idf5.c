@@ -84,6 +84,12 @@ static void *s_i2s_rx_mutex[SOC_I2S_NUM];
 
 static struct i2s_key_slot_s i2s_key_slot[SOC_I2S_NUM];
 
+#ifdef DEBUG_AUDIO
+static uint32_t _i2s_read_count = 0;
+static uint32_t _i2s_write_count = 0;
+static uint32_t _i2s_process_count = 0;
+#endif
+
 #define i2s_safe_lock_create(lock) do {           \
     if (lock == NULL) {                           \
         lock = xSemaphoreCreateRecursiveMutex();  \
@@ -488,6 +494,11 @@ static int _i2s_read(audio_element_handle_t self, char *buffer, int len, TickTyp
     i2s_safe_lock(s_i2s_tx_mutex[i2s->port]);
     i2s_channel_read(i2s_key_slot[i2s->port].rx_handle, buffer, len, &bytes_read, ticks_to_wait);
     i2s_safe_unlock(s_i2s_tx_mutex[i2s->port]);
+#ifdef DEBUG_AUDIO
+    if (_i2s_read_count++ % 100 == 0) {
+        ESP_LOGI(TAG, "_i2s_read: %lu, bytes_read: %d", _i2s_read_count, bytes_read);
+    }
+#endif
     return bytes_read;
 }
 
@@ -511,6 +522,11 @@ static int _i2s_write(audio_element_handle_t self, char *buffer, int len, TickTy
         }
         i2s_safe_unlock(s_i2s_rx_mutex[i2s->port]);
     }
+#ifdef DEBUG_AUDIO
+    if (_i2s_write_count++ % 100 == 0) {
+        ESP_LOGI(TAG, "_i2s_write: %lu, bytes_written: %d", _i2s_write_count, bytes_written);
+    }
+#endif
     return bytes_written;
 }
 
@@ -536,6 +552,11 @@ static int _i2s_process(audio_element_handle_t self, char *in_buffer, int in_len
     } else {
         w_size = r_size;
     }
+#ifdef DEBUG_AUDIO
+    if (_i2s_process_count++ % 100 == 0) {
+        ESP_LOGI(TAG, "_i2s_process: %lu, w_size: %d", _i2s_process_count, w_size);
+    }
+#endif
     return w_size;
 }
 
