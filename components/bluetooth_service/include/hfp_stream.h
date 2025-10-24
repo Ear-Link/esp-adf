@@ -68,15 +68,6 @@ typedef struct {
 esp_err_t hfp_open_and_close_evt_cb_register(esp_hf_audio_open_t open_cb, esp_hf_audio_close_t close_cb);
 
 /**
- * @brief      Initialize and start the hfp service. This function can only be called for one time.
- *
- * @return
- *     - ESP_OK
- *     - ESP_FAIL
- */
-esp_err_t hfp_service_init(void);
-
-/**
  * @brief      Create hfp stream, it is valid when Bluetooth is enabled.
  *
  * @return     The Audio Element handle
@@ -98,6 +89,16 @@ void bt_hf_client_cb(uint16_t _event, void* _param);
  * @param[in]  param  HFP AG callback parameter
  */
 void bt_hf_ag_cb(esp_hf_cb_event_t event, esp_hf_cb_param_t *param);
+
+/**
+ * @brief     Start HFP AG audio task
+ */
+void bt_hf_ag_start_audio(void);
+
+/**
+ * @brief     Stop HFP AG audio task
+ */
+void bt_hf_ag_stop_audio(void);
 #endif
 
 #ifdef __cplusplus
