@@ -430,7 +430,7 @@ static void bt_hf_ag_start_audio_task(void* arg) {
     }
 }
 
-static void bt_hf_ag_start_audio(void) {
+void bt_hf_ag_start_audio(void) {
     s_send_data_Semaphore = xSemaphoreCreateBinary();
     xTaskCreate(bt_hf_ag_start_audio_task, "HFP_AG_audio_task", 2048, NULL,
                 configMAX_PRIORITIES - 3, &s_bt_hf_ag_start_audio_task_handler);
@@ -445,7 +445,7 @@ static void bt_hf_ag_start_audio(void) {
     return;
 }
 
-static void bt_hf_ag_stop_audio(void) {
+void bt_hf_ag_stop_audio(void) {
     if (s_bt_hf_ag_start_audio_task_handler) {
         vTaskDelete(s_bt_hf_ag_start_audio_task_handler);
         s_bt_hf_ag_start_audio_task_handler = NULL;
@@ -509,11 +509,7 @@ void bt_hf_ag_cb(esp_hf_cb_event_t event, esp_hf_cb_param_t* param) {
                          : "CVSD");
             esp_hf_ag_register_data_callback(bt_app_hf_ag_incoming_cb,
                                              bt_app_hf_ag_outgoing_cb);
-            bt_hf_ag_start_audio();
-            ESP_LOGI(TAG, "Started HFP Audio");
         } else if (param->audio_stat.state == ESP_HF_AUDIO_STATE_DISCONNECTED) {
-            bt_hf_ag_stop_audio();
-            ESP_LOGI(TAG, "Stopped HFP Audio");
         }
         break;
 
