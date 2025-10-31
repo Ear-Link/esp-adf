@@ -166,6 +166,53 @@ void bt_a2d_sink_cb(uint16_t _event, void* _param)
             }
             break;
 
+        case ESP_A2D_MEDIA_CTRL_ACK_EVT:
+            esp_a2d_media_ctrl_t cmd = a2d->media_ctrl_stat.cmd;
+            esp_a2d_media_ctrl_ack_t status = a2d->media_ctrl_stat.status;
+
+            ESP_LOGI(TAG, "=== A2DP MEDIA CONTROL ACK ===");
+            const char* cmd_str = "UNKNOWN";
+
+            switch (cmd) {
+            case ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY:
+                cmd_str = "CHECK_SRC_RDY";
+                break;
+            case ESP_A2D_MEDIA_CTRL_START:
+                cmd_str = "START";
+                break;
+            case ESP_A2D_MEDIA_CTRL_STOP:
+                cmd_str = "STOP";
+                break;
+            case ESP_A2D_MEDIA_CTRL_SUSPEND:
+                cmd_str = "SUSPEND";
+                break;
+            default:
+                ESP_LOGW(TAG, "UNKNOWN MEDIA CNTRL EVT");
+                break;
+            }
+
+            const char* status_str = "UNKNOWN";
+            switch (status) {
+            case ESP_A2D_MEDIA_CTRL_ACK_SUCCESS:
+                status_str = "SUCCESS";
+                break;
+            case ESP_A2D_MEDIA_CTRL_ACK_FAILURE:
+                status_str = "FAILURE";
+                break;
+            case ESP_A2D_MEDIA_CTRL_ACK_BUSY:
+                status_str = "BUSY";
+                break;
+            }
+            ESP_LOGI(TAG, "Command: %s", cmd_str);
+            ESP_LOGI(TAG, "Status: %s", status_str);
+            ESP_LOGI(TAG, "=============================");
+            if (cmd == ESP_A2D_MEDIA_CTRL_START &&
+                status != ESP_A2D_MEDIA_CTRL_ACK_SUCCESS) {
+                ESP_LOGE(TAG, "!!! PHONE REJECTED START COMMAND !!!");
+                ESP_LOGE(TAG, "This is why audio won't play!");
+            }
+            break;
+
         case ESP_A2D_AUDIO_STATE_EVT:
             ESP_LOGI(TAG, "=== A2DP AUDIO STATE EVENT ===");
             ESP_LOGI(TAG, "State: %d (%s)", a2d->audio_stat.state, 
