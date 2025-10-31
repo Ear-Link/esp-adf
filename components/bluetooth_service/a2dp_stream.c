@@ -167,17 +167,37 @@ void bt_a2d_sink_cb(uint16_t _event, void* _param)
             break;
 
         case ESP_A2D_AUDIO_STATE_EVT:
-            ESP_LOGD(TAG, "A2DP audio state: %s", audio_state_str[a2d->audio_stat.state]);
-            if (s_aadp_handler.bt_avrc_periph == NULL) {
-                break;
-            }
+            ESP_LOGI(TAG, "=== A2DP AUDIO STATE EVENT ===");
+            ESP_LOGI(TAG, "State: %d (%s)", a2d->audio_stat.state, 
+             audio_state_str[a2d->audio_stat.state]);
+            ESP_LOGI(TAG, "bt_avrc_periph: %s", 
+             s_aadp_handler.bt_avrc_periph ? "EXISTS" : "NULL");
+            ESP_LOGI(TAG, "sink_stream: %s",
+             s_aadp_handler.sink_stream ? "EXISTS" : "NULL");
 
             if (ESP_A2D_AUDIO_STATE_STARTED == a2d->audio_stat.state) {
-                esp_periph_send_event(s_aadp_handler.bt_avrc_periph, PERIPH_BLUETOOTH_AUDIO_STARTED, NULL, 0);
+                ESP_LOGI(TAG, "A2DP stream STARTED - resuming audio element");
+                if (s_aadp_handler.bt_avrc_periph) {
+                    esp_periph_send_event(s_aadp_handler.bt_avrc_periph, 
+                                  PERIPH_BLUETOOTH_AUDIO_STARTED, NULL, 0);
+                }
+                // tell audio element that stream is READY!
+                if (s_aadp_handler.sink_stream) {
+                    audio_element_report_status(s_aadp_handler.sink_stream, 
+                                       AEL_STATUS_STATE_RUNNING);
+                }
             } else if (ESP_A2D_AUDIO_STATE_REMOTE_SUSPEND == a2d->audio_stat.state) {
-                esp_periph_send_event(s_aadp_handler.bt_avrc_periph, PERIPH_BLUETOOTH_AUDIO_SUSPENDED, NULL, 0);
+                ESP_LOGI(TAG, "A2DP stream SUSPENDED");
+                if (s_aadp_handler.bt_avrc_periph) {
+                    esp_periph_send_event(s_aadp_handler.bt_avrc_periph, 
+                                  PERIPH_BLUETOOTH_AUDIO_SUSPENDED, NULL, 0);
+                }
             } else if (ESP_A2D_AUDIO_STATE_STOPPED == a2d->audio_stat.state) {
-                esp_periph_send_event(s_aadp_handler.bt_avrc_periph, PERIPH_BLUETOOTH_AUDIO_STOPPED, NULL, 0);
+                ESP_LOGI(TAG, "A2DP stream STOPPED");
+                if (s_aadp_handler.bt_avrc_periph) {
+                    esp_periph_send_event(s_aadp_handler.bt_avrc_periph, 
+                                  PERIPH_BLUETOOTH_AUDIO_STOPPED, NULL, 0);
+                }
             }
             break;
 
